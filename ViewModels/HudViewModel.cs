@@ -46,6 +46,8 @@ public sealed class HudViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    public VisualizerViewModel Visualizer { get; } = new();
+
     /// <summary>Raised only for volume changes made by the user, never for values read from Windows.</summary>
     public event Action<double>? VolumeChangeRequested;
 

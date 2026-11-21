@@ -31,14 +31,15 @@ public partial class MainWindow : Window
     private const uint SwpFrameChanged = 0x0020;
     private const double ExpandedWidth = 500;
     private const double CollapsedSize = 60;
-    private const double FullHeight = 190;
-    private const double CompactHeight = 118;
+    private const double FullHeight = 230;
+    private const double CompactHeight = 158;
     private static readonly nint HwndTopmost = new(-1);
 
     private readonly HudViewModel _viewModel = new();
     private readonly SystemMetricsService _systemMetrics = new();
     private readonly MediaSessionService _mediaSessions = new();
     private readonly AppVolumeService _appVolume = new();
+    private readonly AudioSpectrumService _audioSpectrum = new();
     private readonly CancellationTokenSource _shutdown = new();
     private Task _pollTask = Task.CompletedTask;
     private Task _volumeWriterTask = Task.CompletedTask;
@@ -55,6 +56,8 @@ public partial class MainWindow : Window
     private bool _mediaCommandInProgress;
     private bool _cleanupStarted;
     private bool _cleanupCompleted;
+    private bool _visualizerRunning;
+    private TimeSpan _lastRenderTime;
 
     public MainWindow()
     {
@@ -73,6 +76,8 @@ public partial class MainWindow : Window
         _overlayTimer.Interval = TimeSpan.FromMilliseconds(250);
         _overlayTimer.Tick += OverlayTimer_Tick;
         _overlayTimer.Start();
+        _audioSpectrum.EnsureRunning();
+        StartVisualizer();
 
         try
         {
@@ -238,6 +243,9 @@ public partial class MainWindow : Window
                 _viewModel.ApplyAppVolume(new AppVolumeReading(false, 0, "SES HATA"));
             }
 
+            // Restarts loopback capture after a playback-device change.
+            _audioSpectrum.EnsureRunning();
+
             await timer.WaitForNextTickAsync(cancellationToken);
         }
     }
@@ -296,6 +304,7 @@ public partial class MainWindow : Window
 
         if (expanded)
         {
+            StartVisualizer();
             DrawerContent.Visibility = Visibility.Visible;
             CollapsedTab.Visibility = Visibility.Collapsed;
             DrawerContent.BeginAnimation(
@@ -310,6 +319,7 @@ public partial class MainWindow : Window
                 // Skip if the drawer was re-opened while fading out.
                 if (!_drawerExpanded)
                 {
+                    StopVisualizer();
                     DrawerContent.Visibility = Visibility.Collapsed;
                     CollapsedTab.Visibility = Visibility.Visible;
                 }
@@ -319,6 +329,44 @@ public partial class MainWindow : Window
 
         Left = 12;
         Top = 12;
+    }
+
+    /// <summary>Animates the visualizer once per rendered frame, only while the drawer is open.</summary>
+    private void StartVisualizer()
+    {
+        if (_visualizerRunning || _cleanupStarted)
+        {
+            return;
+        }
+
+        _visualizerRunning = true;
+        _lastRenderTime = TimeSpan.Zero;
+        CompositionTarget.Rendering += OnCompositionRendering;
+    }
+
+    private void StopVisualizer()
+    {
+        if (!_visualizerRunning)
+        {
+            return;
+        }
+
+        _visualizerRunning = false;
+        CompositionTarget.Rendering -= OnCompositionRendering;
+    }
+
+    private void OnCompositionRendering(object? sender, EventArgs e)
+    {
+        var renderTime = e is RenderingEventArgs rendering ? rendering.RenderingTime : TimeSpan.Zero;
+        if (renderTime == _lastRenderTime)
+        {
+            // Rendering can fire more than once per frame.
+            return;
+        }
+
+        var elapsed = _lastRenderTime == TimeSpan.Zero ? 0 : (renderTime - _lastRenderTime).TotalSeconds;
+        _lastRenderTime = renderTime;
+        _viewModel.Visualizer.Advance(elapsed, _audioSpectrum.GetLatestFrame());
     }
 
     private void ToggleSystemPanel(object sender, RoutedEventArgs e)
@@ -487,6 +535,7 @@ public partial class MainWindow : Window
     {
         _overlayTimer.Stop();
         _overlayTimer.Tick -= OverlayTimer_Tick;
+        StopVisualizer();
         _viewModel.VolumeChangeRequested -= OnVolumeChangeRequested;
         _windowSource?.RemoveHook(WindowMessageHook);
         if (_windowHandle != nint.Zero)
@@ -506,6 +555,7 @@ public partial class MainWindow : Window
 
         _systemMetrics.Dispose();
         _appVolume.Dispose();
+        _audioSpectrum.Dispose();
         _shutdown.Dispose();
     }
 }

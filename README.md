@@ -5,6 +5,7 @@ GearGlass is a compact, always-on-top Windows HUD with a retro gear-inspired the
 ## Features
 
 - Shows media metadata and offers play/pause and track controls through Windows Global System Media Transport Controls (GSMTC).
+- Animates the music in a beat-reactive visualizer with three modes: a single sine wave, a bar chart and a line chart. Click the visualizer strip to switch modes. It analyses the default playback device through WASAPI loopback, so it reacts to everything that is playing.
 - Adjusts the active media application's audio-session volume without changing the system master volume.
 - Reads CPU and memory usage from Windows APIs and GPU usage from Windows PDH GPU Engine counters.
 - Stays above ordinary windows and borderless fullscreen apps without activating itself when clicked.
@@ -28,7 +29,7 @@ dotnet run --project .\GearGlass.App.csproj
 
 ## Tests
 
-The smoke tests cover the platform-independent view-model and media-app matching logic, so they also run on Linux and macOS:
+The smoke tests cover the platform-independent view models, spectrum analysis and media-app matching logic, so they also run on Linux and macOS:
 
 ```powershell
 dotnet run --project .\tests\GearGlass.ToggleSmokeTests.csproj
@@ -38,5 +39,7 @@ dotnet run --project .\tests\GearGlass.ToggleSmokeTests.csproj
 
 - `MainWindow.xaml(.cs)` – HUD window, overlay behaviour and animations.
 - `ViewModels/HudViewModel.cs` – bound state and text formatting.
+- `ViewModels/VisualizerViewModel.cs` – visualizer smoothing, beat pulse and mode; `Views/AudioVisualizer.cs` draws its snapshots.
+- `Services/SpectrumAnalyzer.cs` – FFT bands and beat detection; `Services/AudioSpectrumService.cs` feeds it from loopback capture.
 - `Services/` – CPU, GPU and memory metrics (`SystemMetricsService`), GSMTC media sessions (`MediaSessionService`), per-app volume through NAudio (`AppVolumeService`), and Win32 interop (`OverlayNative`).
 - `tests/` – smoke tests.

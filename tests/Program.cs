@@ -104,5 +104,117 @@ void Check(string name, bool condition)
         AppIdMatcher.DisplayName("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify") == "SPOTIFY");
 }
 
+// --- Spectrum analyzer: frequency bands, loudness and beat detection ---
+{
+    const int rate = 48000;
+    float[] Tone(double frequency, double amplitude, int count, int offset = 0) =>
+        Enumerable.Range(offset, count)
+            .Select(i => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * i / rate)))
+            .ToArray();
+
+    var silence = new SpectrumAnalyzer(rate).Process(new float[4096]);
+    Check("silence produces a frame", silence is not null);
+    Check("silence is quiet", silence!.Level == 0 && silence.Bands.All(b => b == 0));
+    Check("silence has no beat", silence.BeatCount == 0);
+
+    var analyzer = new SpectrumAnalyzer(rate);
+    var tone = analyzer.Process(Tone(1000, 0.5, 4096));
+    var (low, high) = analyzer.BandRange(tone!.DominantBand);
+    Check("1 kHz lands in its band", low <= 1000 && high >= 1000);
+    Check("tone is loud", tone.Level > 0.7);
+    Check("band count", tone.Bands.Length == SpectrumAnalyzer.BandCount);
+
+    var highTone = new SpectrumAnalyzer(rate).Process(Tone(8000, 0.5, 4096));
+    Check("higher tone, higher band", highTone!.DominantBand > tone.DominantBand);
+
+    var hop = new SpectrumAnalyzer(rate);
+    var frames = 0;
+    for (var i = 0; i < 8; i++)
+    {
+        frames += hop.Process(new float[SpectrumAnalyzer.HopSize]) is null ? 0 : 1;
+    }
+
+    Check("one frame per hop once the window is full", frames == 7);
+
+    // Kick drum pattern: 80 ms of 60 Hz every 500 ms, silence between.
+    var beats = new SpectrumAnalyzer(rate);
+    for (var kick = 0; kick < 6; kick++)
+    {
+        beats.Process(Tone(60, 0.8, rate * 80 / 1000));
+        beats.Process(new float[rate * 420 / 1000]);
+    }
+
+    Check("kicks are detected as beats", beats.BeatCount is >= 5 and <= 6);
+
+    var steady = new SpectrumAnalyzer(rate);
+    steady.Process(Tone(60, 0.8, rate * 3));
+    Check("a steady tone is not a stream of beats", steady.BeatCount <= 1);
+
+    var noisy = new SpectrumAnalyzer(rate);
+    Check("NaN samples are ignored",
+        noisy.Process(Enumerable.Repeat(float.NaN, 2048).ToArray())!.Level == 0);
+}
+
+// --- Visualizer view model: smoothing, beats and modes ---
+{
+    SpectrumFrame Frame(float value, long beats) =>
+        new(Enumerable.Repeat(value, SpectrumAnalyzer.BandCount).ToArray(), value, 12, beats, 0);
+
+    var vm = new VisualizerViewModel();
+    var changes = new List<string?>();
+    vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+    Check("starts in sine mode", vm.Mode == VisualizerMode.Sine && vm.ModeLabel == "SİNÜS");
+    vm.CycleModeCommand.Execute(null);
+    Check("click goes to bars", vm.Mode == VisualizerMode.Bars && vm.ModeLabel == "ÇUBUK");
+    vm.CycleMode();
+    Check("then line", vm.Mode == VisualizerMode.Line && vm.ModeLabel == "ÇİZGİ");
+    vm.CycleMode();
+    Check("and back to sine", vm.Mode == VisualizerMode.Sine);
+    Check("snapshot follows the mode", vm.Snapshot.Mode == VisualizerMode.Sine);
+
+    vm.Advance(1 / 60.0, Frame(0.9f, 0));
+    Check("audio is active", vm.IsAudioActive);
+    Check("bars rise quickly", vm.Snapshot.Values[0] > 0.3);
+    for (var i = 0; i < 30; i++)
+    {
+        vm.Advance(1 / 60.0, Frame(0.9f, 0));
+    }
+
+    Check("bars reach the target", Math.Abs(vm.Snapshot.Values[0] - 0.9) < 0.01);
+    var loudAmplitude = vm.Snapshot.Amplitude;
+    Check("loud music, big wave", loudAmplitude > 0.6);
+    Check("first frame does not count as a beat", vm.Snapshot.Pulse == 0);
+
+    vm.Advance(1 / 60.0, Frame(0.9f, 1));
+    Check("a new beat flashes", vm.Snapshot.Pulse > 0.9);
+    for (var i = 0; i < 30; i++)
+    {
+        vm.Advance(1 / 60.0, Frame(0.9f, 1));
+    }
+
+    Check("the flash fades", vm.Snapshot.Pulse == 0);
+
+    var phaseBefore = vm.Snapshot.Phase;
+    vm.Advance(1 / 60.0, null);
+    Check("silence deactivates audio", !vm.IsAudioActive);
+    Check("the wave keeps moving", vm.Snapshot.Phase != phaseBefore);
+    Check("bars fall slowly", vm.Snapshot.Values[0] is > 0.8 and < 0.9);
+    for (var i = 0; i < 120; i++)
+    {
+        vm.Advance(1 / 60.0, null);
+    }
+
+    Check("bars settle to zero", vm.Snapshot.Values.All(v => v == 0));
+    Check("idle wave stays visible", vm.Snapshot.Amplitude > 0 && vm.Snapshot.Amplitude < 0.1);
+
+    vm.Advance(5, Frame(1, 1));
+    Check("a long pause does not jump", vm.Snapshot.Values[0] < 1.01);
+    Check("snapshot is raised", changes.Contains(nameof(VisualizerViewModel.Snapshot)));
+
+    var hud = new HudViewModel();
+    Check("hud exposes the visualizer", hud.Visualizer is not null);
+}
+
 Console.WriteLine($"{passed} passed, {failures} failed");
 return failures == 0 ? 0 : 1;
