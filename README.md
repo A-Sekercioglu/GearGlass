@@ -1,5 +1,5 @@
 # GearGlass
-
+.
 GearGlass is a compact, always-on-top Windows HUD with a retro gear-inspired theme. It displays the current media session and CPU, GPU, and memory usage.
 
 ## Features
