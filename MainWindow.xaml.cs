@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private const double CollapsedSize = 60;
     private const double FullHeight = 230;
     private const double CompactHeight = 158;
+    // How long the drawer stays open after launch or a re-launch, so the HUD is easy to spot.
+    private static readonly TimeSpan RevealDuration = TimeSpan.FromSeconds(4);
     private static readonly nint HwndTopmost = new(-1);
 
     private readonly HudViewModel _viewModel = new();
@@ -53,6 +55,7 @@ public partial class MainWindow : Window
     private bool? _inputModeOverride;
     private double _gearAngle;
     private bool _drawerExpanded = true;
+    private DateTime _holdOpenUntil;
     private bool _mediaCommandInProgress;
     private bool _cleanupStarted;
     private bool _cleanupCompleted;
@@ -73,6 +76,7 @@ public partial class MainWindow : Window
         Top = 12;
         Width = ExpandedWidth;
         Height = ExpandedHeight;
+        _holdOpenUntil = DateTime.UtcNow + RevealDuration;
         _overlayTimer.Interval = TimeSpan.FromMilliseconds(250);
         _overlayTimer.Tick += OverlayTimer_Tick;
         _overlayTimer.Start();
@@ -158,7 +162,7 @@ public partial class MainWindow : Window
             var cursorInside = cursor.X >= windowBounds.Left && cursor.X < windowBounds.Right &&
                                cursor.Y >= windowBounds.Top && cursor.Y < windowBounds.Bottom;
             // In pass-through mode the HUD cannot be clicked, so do not pop it open under the cursor.
-            SetDrawerExpanded(cursorInside && !_isClickThrough);
+            SetDrawerExpanded((cursorInside && !_isClickThrough) || IsHeldOpen);
         }
     }
 
@@ -275,7 +279,20 @@ public partial class MainWindow : Window
 
     private void Drawer_MouseEnter(object sender, MouseEventArgs e) => SetDrawerExpanded(!_isClickThrough);
 
-    private void Drawer_MouseLeave(object sender, MouseEventArgs e) => SetDrawerExpanded(false);
+    private void Drawer_MouseLeave(object sender, MouseEventArgs e) => SetDrawerExpanded(IsHeldOpen);
+
+    private bool IsHeldOpen => DateTime.UtcNow < _holdOpenUntil;
+
+    /// <summary>
+    /// Opens the drawer for a few seconds and puts the HUD back on top. Called when the user
+    /// launches GearGlass again while it is already running, so the launch is never silent.
+    /// </summary>
+    public void RevealHud()
+    {
+        _holdOpenUntil = DateTime.UtcNow + RevealDuration;
+        KeepWindowTopmost();
+        SetDrawerExpanded(true);
+    }
 
     private void SetDrawerExpanded(bool expanded)
     {
