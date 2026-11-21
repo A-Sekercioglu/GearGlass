@@ -6,7 +6,9 @@
         Height="230"
         SizeToContent="Manual"
         Topmost="True"
-        ShowInTaskbar="True"
+        ShowInTaskbar="False"
+        Icon="Assets/GearGlass.ico"
+        Title="GearGlass"
         WindowStyle="None"
         ResizeMode="NoResize"
         AllowsTransparency="True"
@@ -44,6 +46,7 @@
     <Border Margin="8"
             Padding="8"
             CornerRadius="18"
+            MouseLeftButtonDown="Hud_MouseLeftButtonDown"
             BorderThickness="1"
             BorderBrush="#C9A68158"
             Background="#B5211D20">
@@ -51,21 +54,23 @@
             <DropShadowEffect BlurRadius="28" ShadowDepth="5" Opacity="0.38" Color="#080608" />
         </Border.Effect>
         <Grid>
+            <!-- The collapsed window leaves only 28px inside the padding; the negative margin
+                 lets the tab use the padding so the icon is not clipped. -->
             <Border x:Name="CollapsedTab"
                     Visibility="Collapsed"
-                    Width="44"
-                    Height="44"
+                    Width="42"
+                    Height="42"
+                    Margin="-7"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
-                    CornerRadius="12"
+                    CornerRadius="16"
                     BorderThickness="1"
                     BorderBrush="#A57E5F43"
                     Background="#B5302F28">
-                <TextBlock Text="⚙"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Foreground="#E8BE78"
-                           FontSize="19" />
+                <Image Source="Assets/GearGlass.png"
+                       Width="32"
+                       Height="32"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
             </Border>
             <Grid x:Name="DrawerContent">
             <Grid.RowDefinitions>

@@ -216,5 +216,42 @@ void Check(string name, bool condition)
     Check("hud exposes the visualizer", hud.Visualizer is not null);
 }
 
+// --- HUD position: clamping and saving ---
+{
+    var screen = new ScreenArea(0, 0, 1920, 1080);
+    Check("a position on screen is kept",
+        HudPlacement.Clamp(new HudPosition(300, 200), 500, 230, screen) == new HudPosition(300, 200));
+    Check("dragging past the right edge keeps the HUD visible",
+        HudPlacement.Clamp(new HudPosition(1800, 100), 500, 230, screen) == new HudPosition(1420, 100));
+    Check("a position on a removed monitor comes back",
+        HudPlacement.Clamp(new HudPosition(-2500, -400), 500, 230, screen) == new HudPosition(0, 0));
+    Check("bottom edge is respected",
+        HudPlacement.Clamp(new HudPosition(10, 5000), 500, 230, screen) == new HudPosition(10, 850));
+    Check("an invalid position falls back to the corner",
+        HudPlacement.Clamp(new HudPosition(double.NaN, 40), 500, 230, screen) == HudPlacement.Default);
+    var left = new ScreenArea(-1920, 0, 3840, 1080);
+    Check("a monitor left of the primary is allowed",
+        HudPlacement.Clamp(new HudPosition(-1500, 40), 500, 230, left) == new HudPosition(-1500, 40));
+
+    var dir = Path.Combine(Path.GetTempPath(), "GearGlassTests-" + Guid.NewGuid().ToString("N"));
+    var path = Path.Combine(dir, "settings.json");
+    try
+    {
+        var store = new HudSettingsStore(path);
+        Check("no settings file means no saved position", store.LoadPosition() is null);
+        store.SavePosition(new HudPosition(640.5, 320));
+        Check("saved position is read back", new HudSettingsStore(path).LoadPosition() == new HudPosition(640.5, 320));
+        File.WriteAllText(path, "{ not json");
+        Check("a damaged settings file is ignored", store.LoadPosition() is null);
+    }
+    finally
+    {
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+}
+
 Console.WriteLine($"{passed} passed, {failures} failed");
 return failures == 0 ? 0 : 1;

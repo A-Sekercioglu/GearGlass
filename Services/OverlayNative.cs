@@ -83,6 +83,35 @@ internal static class OverlayNative
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
 
+    public const uint EventSystemForeground = 0x0003;
+    private const uint WinEventOutOfContext = 0x0000;
+    private const uint WinEventSkipOwnProcess = 0x0002;
+
+    public delegate void WinEventProc(
+        nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint eventThread, uint eventTime);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWinEventHook(
+        uint eventMin, uint eventMax, nint module, WinEventProc callback, uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UnhookWinEvent(nint hook);
+
+    /// <summary>
+    /// Calls <paramref name="callback"/> on this (UI) thread whenever another window comes to
+    /// the foreground. The caller must keep the delegate alive until it unhooks.
+    /// </summary>
+    public static nint HookForegroundChanges(WinEventProc callback) =>
+        SetWinEventHook(
+            EventSystemForeground,
+            EventSystemForeground,
+            nint.Zero,
+            callback,
+            0,
+            0,
+            WinEventOutOfContext | WinEventSkipOwnProcess);
+
     public static nint GetWindowLongPtr(nint hWnd, int index) =>
         nint.Size == 8 ? GetWindowLongPtr64(hWnd, index) : GetWindowLong32(hWnd, index);
 

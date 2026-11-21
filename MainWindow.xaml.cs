@@ -43,6 +43,12 @@ public partial class MainWindow : Window
     private readonly AppVolumeService _appVolume = new();
     private readonly AudioSpectrumService _audioSpectrum = new();
     private readonly CancellationTokenSource _shutdown = new();
+    private readonly HudSettingsStore _settings = new();
+    // Kept in a field so the native hook never calls a collected delegate.
+    private readonly OverlayNative.WinEventProc _foregroundChanged;
+    private readonly DispatcherTimer _topmostBurstTimer = new(DispatcherPriority.Normal);
+    private DateTime _topmostBurstUntil;
+    private nint _foregroundHook;
     private Task _pollTask = Task.CompletedTask;
     private Task _volumeWriterTask = Task.CompletedTask;
     private double? _pendingVolume;
@@ -67,13 +73,24 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _viewModel;
         _viewModel.VolumeChangeRequested += OnVolumeChangeRequested;
+        _foregroundChanged = OnForegroundChanged;
+        _topmostBurstTimer.Interval = TimeSpan.FromMilliseconds(100);
+        _topmostBurstTimer.Tick += TopmostBurstTimer_Tick;
         BuildGear();
+
+        // Position before the first frame so the HUD never flashes at a default spot.
+        var position = PlaceOnScreen(_settings.LoadPosition() ?? HudPlacement.Default);
+        Left = position.Left;
+        Top = position.Top;
     }
+
+    /// <summary>Raised when the user hides the HUD with its × button; the app keeps running in the tray.</summary>
+    public event Action? HiddenToTray;
+
+    public bool IsClickThrough => _isClickThrough;
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        Left = 12;
-        Top = 12;
         Width = ExpandedWidth;
         Height = ExpandedHeight;
         _holdOpenUntil = DateTime.UtcNow + RevealDuration;
@@ -112,6 +129,36 @@ public partial class MainWindow : Window
         }
 
         ApplyOverlayStyles();
+        KeepWindowTopmost();
+        _foregroundHook = OverlayNative.HookForegroundChanges(_foregroundChanged);
+    }
+
+    /// <summary>
+    /// A game or other window just came to the front. Put the HUD back on top right away and
+    /// keep doing so for a moment, because games often reorder their window while they start
+    /// or switch to fullscreen.
+    /// </summary>
+    private void OnForegroundChanged(
+        nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint eventThread, uint eventTime)
+    {
+        if (_cleanupStarted || !IsVisible)
+        {
+            return;
+        }
+
+        KeepWindowTopmost();
+        _topmostBurstUntil = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        _topmostBurstTimer.Start();
+    }
+
+    private void TopmostBurstTimer_Tick(object? sender, EventArgs e)
+    {
+        if (DateTime.UtcNow >= _topmostBurstUntil || _cleanupStarted)
+        {
+            _topmostBurstTimer.Stop();
+            return;
+        }
+
         KeepWindowTopmost();
     }
 
@@ -166,7 +213,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ToggleInputMode()
+    /// <summary>Switches mouse pass-through on or off (Ctrl+Alt+F12 or the tray menu).</summary>
+    public void ToggleInputMode()
     {
         var currentlyClickThrough = _inputModeOverride ?? _fullscreenWindowActive;
         _inputModeOverride = !currentlyClickThrough;
@@ -289,10 +337,79 @@ public partial class MainWindow : Window
     /// </summary>
     public void RevealHud()
     {
+        if (_cleanupStarted)
+        {
+            return;
+        }
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
         _holdOpenUntil = DateTime.UtcNow + RevealDuration;
         KeepWindowTopmost();
         SetDrawerExpanded(true);
     }
+
+    /// <summary>Hides the HUD; GearGlass keeps running in the notification area.</summary>
+    public void HideHud()
+    {
+        if (!IsVisible || _cleanupStarted)
+        {
+            return;
+        }
+
+        _holdOpenUntil = DateTime.MinValue;
+        SetDrawerExpanded(false);
+        StopVisualizer();
+        Hide();
+    }
+
+    /// <summary>Moves the HUD back to the top-left corner and forgets the saved position.</summary>
+    public void ResetPosition()
+    {
+        Left = HudPlacement.Default.Left;
+        Top = HudPlacement.Default.Top;
+        _settings.SavePosition(HudPlacement.Default);
+        RevealHud();
+    }
+
+    /// <summary>Lets the user drag the HUD by any part that is not a control.</summary>
+    private void Hud_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_isClickThrough || e.ButtonState != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        try
+        {
+            DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            // The button was already released; nothing to drag.
+            return;
+        }
+
+        var position = PlaceOnScreen(new HudPosition(Left, Top));
+        Left = position.Left;
+        Top = position.Top;
+        _settings.SavePosition(position);
+    }
+
+    /// <summary>Keeps the fully opened HUD inside the visible desktop.</summary>
+    private static HudPosition PlaceOnScreen(HudPosition position) =>
+        HudPlacement.Clamp(
+            position,
+            ExpandedWidth,
+            FullHeight,
+            new ScreenArea(
+                SystemParameters.VirtualScreenLeft,
+                SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenWidth,
+                SystemParameters.VirtualScreenHeight));
 
     private void SetDrawerExpanded(bool expanded)
     {
@@ -343,9 +460,6 @@ public partial class MainWindow : Window
             };
             DrawerContent.BeginAnimation(UIElement.OpacityProperty, fadeOut);
         }
-
-        Left = 12;
-        Top = 12;
     }
 
     /// <summary>Animates the visualizer once per rendered frame, only while the drawer is open.</summary>
@@ -412,8 +526,6 @@ public partial class MainWindow : Window
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             },
             HandoffBehavior.SnapshotAndReplace);
-        Top = 12;
-        Left = 12;
     }
 
     private void SystemPanel_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -431,7 +543,11 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+    private void CloseWindow_Click(object sender, RoutedEventArgs e)
+    {
+        HideHud();
+        HiddenToTray?.Invoke();
+    }
 
     private void OnVolumeChangeRequested(double percent)
     {
@@ -552,6 +668,14 @@ public partial class MainWindow : Window
     {
         _overlayTimer.Stop();
         _overlayTimer.Tick -= OverlayTimer_Tick;
+        _topmostBurstTimer.Stop();
+        _topmostBurstTimer.Tick -= TopmostBurstTimer_Tick;
+        if (_foregroundHook != nint.Zero)
+        {
+            OverlayNative.UnhookWinEvent(_foregroundHook);
+            _foregroundHook = nint.Zero;
+        }
+
         StopVisualizer();
         _viewModel.VolumeChangeRequested -= OnVolumeChangeRequested;
         _windowSource?.RemoveHook(WindowMessageHook);

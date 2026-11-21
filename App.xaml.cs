@@ -1,4 +1,5 @@
 using System.Windows;
+using GearGlass.Services;
 
 namespace GearGlass;
 
@@ -9,6 +10,7 @@ public partial class App : Application
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _revealEvent;
     private RegisteredWaitHandle? _revealWait;
+    private TrayIconService? _tray;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -28,6 +30,7 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+        CreateTrayIcon(window);
 
         // Another launch sets this event; the running HUD then opens itself instead of
         // the new process quitting without any visible response.
@@ -38,6 +41,38 @@ public partial class App : Application
             null,
             Timeout.Infinite,
             executeOnlyOnce: false);
+    }
+
+    private void CreateTrayIcon(MainWindow window)
+    {
+        var iconResource = GetResourceStream(new Uri("pack://application:,,,/Assets/GearGlass.ico"));
+        if (iconResource is null)
+        {
+            return;
+        }
+
+        using (var iconStream = iconResource.Stream)
+        {
+            _tray = new TrayIconService(iconStream);
+        }
+
+        _tray.ShowRequested += window.RevealHud;
+        _tray.ToggleVisibilityRequested += () =>
+        {
+            if (window.IsVisible)
+            {
+                window.HideHud();
+            }
+            else
+            {
+                window.RevealHud();
+            }
+        };
+        _tray.ClickThroughToggleRequested += window.ToggleInputMode;
+        _tray.ResetPositionRequested += window.ResetPosition;
+        _tray.ExitRequested += window.Close;
+        _tray.MenuOpening += () => _tray.UpdateMenuState(window.IsVisible, window.IsClickThrough);
+        window.HiddenToTray += _tray.NotifyHiddenToTray;
     }
 
     private static void SignalRunningInstance()
@@ -55,6 +90,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _tray?.Dispose();
+        _tray = null;
         _revealWait?.Unregister(null);
         _revealWait = null;
         _revealEvent?.Dispose();

@@ -14,5 +14,6 @@
     <Compile Include="..\Services\SpectrumAnalyzer.cs" Link="Linked\SpectrumAnalyzer.cs" />
     <Compile Include="..\ViewModels\VisualizerViewModel.cs" Link="Linked\VisualizerViewModel.cs" />
     <Compile Include="..\ViewModels\RelayCommand.cs" Link="Linked\RelayCommand.cs" />
+    <Compile Include="..\Services\HudPlacement.cs" Link="Linked\HudPlacement.cs" />
   </ItemGroup>
 </Project>
