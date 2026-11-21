@@ -29,6 +29,10 @@ public partial class MainWindow : Window
     private const uint SwpNoMove = 0x0002;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpFrameChanged = 0x0020;
+    private const double ExpandedWidth = 500;
+    private const double CollapsedSize = 60;
+    private const double FullHeight = 190;
+    private const double CompactHeight = 118;
     private static readonly nint HwndTopmost = new(-1);
 
     private readonly HudViewModel _viewModel = new();
@@ -37,20 +41,26 @@ public partial class MainWindow : Window
     private readonly AppVolumeService _appVolume = new();
     private readonly CancellationTokenSource _shutdown = new();
     private Task _pollTask = Task.CompletedTask;
+    private Task _volumeWriterTask = Task.CompletedTask;
+    private double? _pendingVolume;
     private readonly DispatcherTimer _overlayTimer = new(DispatcherPriority.Background);
     private HwndSource? _windowSource;
     private nint _windowHandle;
     private bool _isClickThrough;
     private bool _fullscreenWindowActive;
-    private bool? _inputModeOverride = false;
+    // null = automatic: mouse input on, pass-through while a fullscreen app is in the foreground.
+    private bool? _inputModeOverride;
     private double _gearAngle;
     private bool _drawerExpanded = true;
     private bool _mediaCommandInProgress;
+    private bool _cleanupStarted;
+    private bool _cleanupCompleted;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = _viewModel;
+        _viewModel.VolumeChangeRequested += OnVolumeChangeRequested;
         BuildGear();
     }
 
@@ -58,9 +68,8 @@ public partial class MainWindow : Window
     {
         Left = 12;
         Top = 12;
-        Width = 500;
-        Height = 190;
-        SetDrawerExpanded(true);
+        Width = ExpandedWidth;
+        Height = ExpandedHeight;
         _overlayTimer.Interval = TimeSpan.FromMilliseconds(250);
         _overlayTimer.Tick += OverlayTimer_Tick;
         _overlayTimer.Start();
@@ -123,7 +132,14 @@ public partial class MainWindow : Window
         }
 
         KeepWindowTopmost();
-        _fullscreenWindowActive = OverlayNative.IsFullscreenWindowForeground(_windowHandle);
+        var fullscreenActive = OverlayNative.IsFullscreenWindowForeground(_windowHandle);
+        if (fullscreenActive != _fullscreenWindowActive)
+        {
+            // A manual Ctrl+Alt+F12 choice lasts until the fullscreen state changes.
+            _fullscreenWindowActive = fullscreenActive;
+            _inputModeOverride = null;
+        }
+
         var clickThrough = _inputModeOverride ?? _fullscreenWindowActive;
         if (_isClickThrough != clickThrough)
         {
@@ -136,7 +152,8 @@ public partial class MainWindow : Window
         {
             var cursorInside = cursor.X >= windowBounds.Left && cursor.X < windowBounds.Right &&
                                cursor.Y >= windowBounds.Top && cursor.Y < windowBounds.Bottom;
-            SetDrawerExpanded(cursorInside);
+            // In pass-through mode the HUD cannot be clicked, so do not pop it open under the cursor.
+            SetDrawerExpanded(cursorInside && !_isClickThrough);
         }
     }
 
@@ -190,7 +207,6 @@ public partial class MainWindow : Window
     private async Task PollAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-        var nextMediaRefresh = DateTime.MinValue;
 
         while (true)
         {
@@ -201,19 +217,26 @@ public partial class MainWindow : Window
                 var snapshot = await Task.Run(_systemMetrics.Read, cancellationToken);
                 _viewModel.ApplySystemSnapshot(snapshot);
             }
-            catch (Win32Exception error)
+            catch (Exception error) when (error is not OperationCanceledException)
             {
-                _viewModel.ReportSystemError(error.Message);
+                _viewModel.ReportSystemError(error is Win32Exception ? error.Message : "Sistem verisi okunamadı");
             }
 
-            if (DateTime.UtcNow >= nextMediaRefresh)
+            try
             {
-                _viewModel.ApplyMediaResult(await _mediaSessions.ReadCurrentAsync());
-                nextMediaRefresh = DateTime.UtcNow.AddSeconds(2);
-            }
+                if (!_mediaCommandInProgress)
+                {
+                    _viewModel.ApplyMediaResult(await _mediaSessions.ReadCurrentAsync());
+                }
 
-            var volume = await Task.Run(() => _appVolume.Read(_viewModel.MediaSourceHint), cancellationToken);
-            _viewModel.ApplyAppVolume(volume);
+                var hint = _viewModel.MediaSourceHint;
+                var volume = await Task.Run(() => _appVolume.Read(hint), cancellationToken);
+                _viewModel.ApplyAppVolume(volume);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                _viewModel.ApplyAppVolume(new AppVolumeReading(false, 0, "SES HATA"));
+            }
 
             await timer.WaitForNextTickAsync(cancellationToken);
         }
@@ -240,12 +263,9 @@ public partial class MainWindow : Window
         GearShape.Points = points;
     }
 
-    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        // The drawer is locked to the upper-left corner.
-    }
+    private double ExpandedHeight => _viewModel.IsSystemPanelExpanded ? FullHeight : CompactHeight;
 
-    private void Drawer_MouseEnter(object sender, MouseEventArgs e) => SetDrawerExpanded(true);
+    private void Drawer_MouseEnter(object sender, MouseEventArgs e) => SetDrawerExpanded(!_isClickThrough);
 
     private void Drawer_MouseLeave(object sender, MouseEventArgs e) => SetDrawerExpanded(false);
 
@@ -258,24 +278,45 @@ public partial class MainWindow : Window
 
         _drawerExpanded = expanded;
 
+        var duration = TimeSpan.FromMilliseconds(expanded ? 260 : 220);
         BeginAnimation(
             WidthProperty,
-            new DoubleAnimation(expanded ? 500 : 60, TimeSpan.FromMilliseconds(expanded ? 260 : 220))
+            new DoubleAnimation(expanded ? ExpandedWidth : CollapsedSize, duration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            });
+            },
+            HandoffBehavior.SnapshotAndReplace);
         BeginAnimation(
             HeightProperty,
-            new DoubleAnimation(expanded ? 190 : 60, TimeSpan.FromMilliseconds(expanded ? 260 : 220))
+            new DoubleAnimation(expanded ? ExpandedHeight : CollapsedSize, duration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            });
+            },
+            HandoffBehavior.SnapshotAndReplace);
 
-        DrawerContent.BeginAnimation(
-            UIElement.OpacityProperty,
-            new DoubleAnimation(expanded ? 1 : 0, TimeSpan.FromMilliseconds(expanded ? 180 : 120)));
-        DrawerContent.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        CollapsedTab.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
+        if (expanded)
+        {
+            DrawerContent.Visibility = Visibility.Visible;
+            CollapsedTab.Visibility = Visibility.Collapsed;
+            DrawerContent.BeginAnimation(
+                UIElement.OpacityProperty,
+                new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+        }
+        else
+        {
+            var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(120));
+            fadeOut.Completed += (_, _) =>
+            {
+                // Skip if the drawer was re-opened while fading out.
+                if (!_drawerExpanded)
+                {
+                    DrawerContent.Visibility = Visibility.Collapsed;
+                    CollapsedTab.Visibility = Visibility.Visible;
+                }
+            };
+            DrawerContent.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        }
+
         Left = 12;
         Top = 12;
     }
@@ -301,7 +342,7 @@ public partial class MainWindow : Window
 
         BeginAnimation(
             HeightProperty,
-            new DoubleAnimation(isExpanded ? 190 : 118, TimeSpan.FromMilliseconds(260))
+            new DoubleAnimation(ExpandedHeight, TimeSpan.FromMilliseconds(260))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             },
@@ -327,14 +368,36 @@ public partial class MainWindow : Window
 
     private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void AppVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void OnVolumeChangeRequested(double percent)
     {
-        if (!IsLoaded || !_viewModel.AppVolumeAvailable)
+        if (_cleanupStarted)
         {
             return;
         }
 
-        _ = Task.Run(() => _appVolume.SetVolume(_viewModel.MediaSourceHint, e.NewValue));
+        // Coalesce slider drags: only the latest value is written, one write at a time.
+        _pendingVolume = percent;
+        if (_volumeWriterTask.IsCompleted)
+        {
+            _volumeWriterTask = WritePendingVolumeAsync();
+        }
+    }
+
+    private async Task WritePendingVolumeAsync()
+    {
+        while (_pendingVolume is double percent)
+        {
+            _pendingVolume = null;
+            var hint = _viewModel.MediaSourceHint;
+            try
+            {
+                await Task.Run(() => _appVolume.SetVolume(hint, percent));
+            }
+            catch (Exception)
+            {
+                _viewModel.ApplyAppVolume(new AppVolumeReading(false, 0, "SES HATA"));
+            }
+        }
     }
 
     private async void PreviousTrack_Click(object sender, RoutedEventArgs e) =>
@@ -356,7 +419,7 @@ public partial class MainWindow : Window
         _mediaCommandInProgress = true;
         try
         {
-            var before = await _mediaSessions.ReadCurrentAsync();
+            var before = _viewModel.CurrentSession;
             var result = await _mediaSessions.SendCommandAsync(command);
             if (!result.Accepted)
             {
@@ -369,7 +432,7 @@ public partial class MainWindow : Window
                 await Task.Delay(250);
                 var mediaResult = await _mediaSessions.ReadCurrentAsync();
                 _viewModel.ApplyMediaResult(mediaResult);
-                if (HasMediaStateChanged(before.Session, mediaResult.Session, command))
+                if (HasMediaStateChanged(before, mediaResult.Session, command))
                 {
                     break;
                 }
@@ -399,10 +462,32 @@ public partial class MainWindow : Window
         };
     }
 
-    private async void Window_Closed(object? sender, EventArgs e)
+    private async void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_cleanupCompleted)
+        {
+            return;
+        }
+
+        // Finish background work before the app shuts down so services are disposed safely.
+        e.Cancel = true;
+        if (_cleanupStarted)
+        {
+            return;
+        }
+
+        _cleanupStarted = true;
+        Hide();
+        await CleanupAsync();
+        _cleanupCompleted = true;
+        Close();
+    }
+
+    private async Task CleanupAsync()
     {
         _overlayTimer.Stop();
         _overlayTimer.Tick -= OverlayTimer_Tick;
+        _viewModel.VolumeChangeRequested -= OnVolumeChangeRequested;
         _windowSource?.RemoveHook(WindowMessageHook);
         if (_windowHandle != nint.Zero)
         {
@@ -412,10 +497,11 @@ public partial class MainWindow : Window
         _shutdown.Cancel();
         try
         {
-            await _pollTask;
+            await Task.WhenAll(_pollTask, _volumeWriterTask).WaitAsync(TimeSpan.FromSeconds(3));
         }
-        catch (OperationCanceledException)
+        catch (Exception)
         {
+            // Cancellation or a timeout: nothing more to wait for.
         }
 
         _systemMetrics.Dispose();

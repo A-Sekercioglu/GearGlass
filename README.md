@@ -8,7 +8,9 @@ GearGlass is a compact, always-on-top Windows HUD with a retro gear-inspired the
 - Adjusts the active media application's audio-session volume without changing the system master volume.
 - Reads CPU and memory usage from Windows APIs and GPU usage from Windows PDH GPU Engine counters.
 - Stays above ordinary windows and borderless fullscreen apps without activating itself when clicked.
-- Press `Ctrl+Alt+F12` to toggle mouse pass-through. Mouse input is enabled by default so HUD controls remain clickable.
+- Mouse input is enabled by default so HUD controls remain clickable. While a fullscreen app is in the foreground the HUD switches to mouse pass-through automatically.
+- Press `Ctrl+Alt+F12` to toggle mouse pass-through manually. The manual choice lasts until the foreground fullscreen state changes.
+- Only one copy runs at a time; starting it again does nothing while GearGlass is already open.
 - Exclusive fullscreen games may cover ordinary Windows overlays. Use borderless/windowed fullscreen if the HUD is not visible.
 
 ## Requirements
@@ -26,8 +28,15 @@ dotnet run --project .\GearGlass.App.csproj
 
 ## Tests
 
-Run the WPF smoke tests on Windows:
+The smoke tests cover the platform-independent view-model and media-app matching logic, so they also run on Linux and macOS:
 
 ```powershell
 dotnet run --project .\tests\GearGlass.ToggleSmokeTests.csproj
 ```
+
+## Project layout
+
+- `MainWindow.xaml(.cs)` – HUD window, overlay behaviour and animations.
+- `ViewModels/HudViewModel.cs` – bound state and text formatting.
+- `Services/` – CPU, GPU and memory metrics (`SystemMetricsService`), GSMTC media sessions (`MediaSessionService`), per-app volume through NAudio (`AppVolumeService`), and Win32 interop (`OverlayNative`).
+- `tests/` – smoke tests.

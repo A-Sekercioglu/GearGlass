@@ -14,7 +14,7 @@
         MouseLeave="Drawer_MouseLeave"
         Loaded="Window_Loaded"
         SourceInitialized="Window_SourceInitialized"
-        Closed="Window_Closed">
+        Closing="Window_Closing">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Template">
@@ -75,8 +75,7 @@
             <Border Grid.Row="0"
                     Padding="8,5"
                     CornerRadius="12"
-                    Background="#B5302F28"
-                    MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    Background="#B5302F28">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="38" />
@@ -91,11 +90,6 @@
                             CornerRadius="7"
                             BorderBrush="#A57E5F43"
                             BorderThickness="1">
-                        <Border.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="9" />
-                            </Style>
-                        </Border.Resources>
                         <Border.Background>
                             <LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
                                 <GradientStop Color="#28423C" Offset="0" />
@@ -150,7 +144,6 @@
                                 Background="#332D2721"
                                 BorderBrush="#705F4935"
                                 BorderThickness="1"
-                                Style="{x:Null}"
                                 Cursor="Hand"
                                 Click="PlayPause_Click"
                                 ToolTip="Oynat veya duraklat" />
@@ -185,7 +178,6 @@
                                 Value="{Binding AppVolumePercent, Mode=TwoWay}"
                                 IsEnabled="{Binding AppVolumeAvailable}"
                                 AutomationProperties.Name="Aktif uygulama ses düzeyi"
-                                ValueChanged="AppVolumeSlider_ValueChanged"
                                 ToolTip="Yalnızca aktif medya uygulamasının ses düzeyi" />
                     </StackPanel>
                     <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
