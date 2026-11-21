@@ -23,6 +23,14 @@ GPU counters depend on driver support. Media controls and metadata are available
 
 ## Run
 
+Open `GearGlass.sln` in Visual Studio, or build everything from the command line:
+
+```powershell
+dotnet build .\GearGlass.sln
+```
+
+Run the app:
+
 ```powershell
 dotnet run --project .\GearGlass.App.csproj
 ```
