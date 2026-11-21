@@ -1,0 +1,340 @@
+<Window x:Class="GearGlass.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="500"
+        Height="190"
+        SizeToContent="Manual"
+        Topmost="True"
+        ShowInTaskbar="True"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="#00171519"
+        MouseEnter="Drawer_MouseEnter"
+        MouseLeave="Drawer_MouseLeave"
+        Loaded="Window_Loaded"
+        SourceInitialized="Window_SourceInitialized"
+        Closed="Window_Closed">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Border Margin="8"
+            Padding="8"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="#C9A68158"
+            Background="#B5211D20">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="5" Opacity="0.38" Color="#080608" />
+        </Border.Effect>
+        <Grid>
+            <Border x:Name="CollapsedTab"
+                    Visibility="Collapsed"
+                    Width="44"
+                    Height="44"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    CornerRadius="12"
+                    BorderThickness="1"
+                    BorderBrush="#A57E5F43"
+                    Background="#B5302F28">
+                <TextBlock Text="⚙"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="#E8BE78"
+                           FontSize="19" />
+            </Border>
+            <Grid x:Name="DrawerContent">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Padding="8,5"
+                    CornerRadius="12"
+                    Background="#B5302F28"
+                    MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="24" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="34"
+                            Height="34"
+                            CornerRadius="7"
+                            BorderBrush="#A57E5F43"
+                            BorderThickness="1">
+                        <Border.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="9" />
+                            </Style>
+                        </Border.Resources>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
+                                <GradientStop Color="#28423C" Offset="0" />
+                                <GradientStop Color="#914C40" Offset="0.58" />
+                                <GradientStop Color="#B7834A" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <TextBlock Text="♫"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#E8BE78"
+                                   FontFamily="Georgia"
+                                   FontSize="20" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,8,0">
+                        <TextBlock Text="{Binding TrackTitle}"
+                                   Foreground="#F1E3CE"
+                                   FontFamily="Georgia"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding TrackSubtitle}"
+                                   Margin="0,2,0,0"
+                                   Foreground="#AC9B84"
+                                   FontSize="9"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                        <Button Width="22"
+                                Height="25"
+                                Padding="0"
+                                Content="⏮"
+                                FontFamily="Segoe UI Symbol"
+                                FontSize="11"
+                                Foreground="#BDA57F"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Click="PreviousTrack_Click"
+                                ToolTip="Önceki parça" />
+                        <Button Width="26"
+                                Height="26"
+                                Margin="1,0"
+                                Padding="0"
+                                Content="{Binding PlaybackControlGlyph}"
+                                FontFamily="Segoe UI Symbol"
+                                FontSize="11"
+                                Foreground="#E8BE78"
+                                Background="#332D2721"
+                                BorderBrush="#705F4935"
+                                BorderThickness="1"
+                                Style="{x:Null}"
+                                Cursor="Hand"
+                                Click="PlayPause_Click"
+                                ToolTip="Oynat veya duraklat" />
+                        <Button Width="22"
+                                Height="25"
+                                Padding="0"
+                                Content="⏭"
+                                FontFamily="Segoe UI Symbol"
+                                FontSize="11"
+                                Foreground="#BDA57F"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Click="NextTrack_Click"
+                                ToolTip="Sonraki parça" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3"
+                                VerticalAlignment="Center"
+                                Margin="4,0">
+                        <TextBlock Text="{Binding AppVolumeStatus}"
+                                   Foreground="#A99172"
+                                   FontFamily="Consolas"
+                                   FontSize="7"
+                                   HorizontalAlignment="Center" />
+                        <Slider x:Name="AppVolumeSlider"
+                                Width="62"
+                                Height="20"
+                                Minimum="0"
+                                Maximum="100"
+                                SmallChange="2"
+                                LargeChange="10"
+                                Value="{Binding AppVolumePercent, Mode=TwoWay}"
+                                IsEnabled="{Binding AppVolumeAvailable}"
+                                AutomationProperties.Name="Aktif uygulama ses düzeyi"
+                                ValueChanged="AppVolumeSlider_ValueChanged"
+                                ToolTip="Yalnızca aktif medya uygulamasının ses düzeyi" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding MediaSource}"
+                                   Foreground="#D2AA6B"
+                                   FontFamily="Consolas"
+                                   FontSize="8"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding PlaybackStatus}"
+                                   Margin="0,3,0,0"
+                                   Foreground="#8FA28A"
+                                   FontFamily="Consolas"
+                                   FontSize="7"
+                                   HorizontalAlignment="Right" />
+                    </StackPanel>
+                    <Button x:Name="CloseWindowButton"
+                            Grid.Column="5"
+                            Width="20"
+                            Height="22"
+                            Margin="4,0,0,0"
+                            Padding="0"
+                            Content="×"
+                            FontFamily="Segoe UI"
+                            FontSize="15"
+                            Foreground="#C9A987"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            Click="CloseWindow_Click"
+                            ToolTip="GearGlass'ı kapat" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Margin="0,6,0,0"
+                    Padding="7,5"
+                    CornerRadius="14"
+                    BorderBrush="#70514C3A"
+                    BorderThickness="1"
+                    Background="#B5282224"
+                    MouseWheel="SystemPanel_MouseWheel">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" LastChildFill="True">
+                        <Button x:Name="ToggleSystemPanelButton"
+                                DockPanel.Dock="Right"
+                                Width="22"
+                                Height="21"
+                                Margin="3,0,0,0"
+                                Padding="0"
+                                Content="{Binding ToggleGlyph}"
+                                Foreground="#D4B77F"
+                                Background="#302E2722"
+                                BorderBrush="#685A4834"
+                                BorderThickness="1"
+                                Cursor="Hand"
+                                Click="ToggleSystemPanel"
+                                AutomationProperties.Name="Sistem göstergelerini aç veya kapat"
+                                ToolTip="Sistem göstergelerini aç veya kapat" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="SİSTEM DURUMU"
+                                       Foreground="#C5AA7D"
+                                       FontFamily="Consolas"
+                                       FontSize="8"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding SystemStatus}"
+                                       Margin="8,0,0,0"
+                                       Foreground="#87927D"
+                                       FontSize="8"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Grid x:Name="SystemPanelContent"
+                          Grid.Row="1"
+                          Height="72"
+                          Margin="0,4,0,0"
+                          ClipToBounds="True">
+                        <Grid.RenderTransform>
+                            <TranslateTransform x:Name="SystemPanelSlide" />
+                        </Grid.RenderTransform>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="68" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Width="62" Height="62">
+                            <Polygon x:Name="GearShape"
+                                     Fill="#C9A66A"
+                                     Stroke="#E2C589"
+                                     StrokeThickness="0.7">
+                                <Polygon.RenderTransform>
+                                    <RotateTransform x:Name="GearRotation" CenterX="31" CenterY="31" />
+                                </Polygon.RenderTransform>
+                            </Polygon>
+                            <Ellipse Width="42"
+                                     Height="42"
+                                     Fill="#2D2525"
+                                     Stroke="#AB8050"
+                                     StrokeThickness="1"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" />
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding FocusLabel}"
+                                           Foreground="#B4A184"
+                                           FontFamily="Consolas"
+                                           FontSize="6"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding FocusValue}"
+                                           MaxWidth="38"
+                                           Margin="0,1,0,0"
+                                           Foreground="#E7BE78"
+                                           FontFamily="Georgia"
+                                           FontSize="10"
+                                           HorizontalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Column="1" Margin="5,0,0,0" VerticalAlignment="Center">
+                            <Grid x:Name="MetricsPanel" Height="44" ClipToBounds="True">
+                                <UniformGrid Columns="3">
+                                    <Border Margin="0,0,4,0" Padding="6,4" CornerRadius="9" Background="#422D2925" BorderBrush="#504E3C2C" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="CPU" Foreground="#A79170" FontFamily="Consolas" FontSize="7" />
+                                            <TextBlock Text="{Binding CpuUsageText}" Margin="0,2,0,0" Foreground="#E5C17E" FontFamily="Consolas" FontSize="10" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Margin="0,0,4,0" Padding="6,4" CornerRadius="9" Background="#422D2925" BorderBrush="#504E3C2C" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="GPU" Foreground="#A79170" FontFamily="Consolas" FontSize="7" />
+                                            <TextBlock Text="{Binding GpuUsageText}" Margin="0,2,0,0" Foreground="#E5C17E" FontFamily="Consolas" FontSize="10" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Padding="6,4" CornerRadius="9" Background="#422D2925" BorderBrush="#504E3C2C" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="BELLEK" Foreground="#A79170" FontFamily="Consolas" FontSize="7" />
+                                            <TextBlock Text="{Binding MemoryText}" Margin="0,2,0,0" Foreground="#E5C17E" FontFamily="Consolas" FontSize="9" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Border>
+                                </UniformGrid>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+        </Grid>
+    </Border>
+</Window>
