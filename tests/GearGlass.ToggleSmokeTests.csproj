@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GearGlass.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Platform-independent app sources; the WPF and Windows API code is not linked. -->
+    <Compile Include="..\ViewModels\HudViewModel.cs" Link="Linked\HudViewModel.cs" />
+    <Compile Include="..\Services\MediaModels.cs" Link="Linked\MediaModels.cs" />
+    <Compile Include="..\Services\AppIdMatcher.cs" Link="Linked\AppIdMatcher.cs" />
+    <Compile Include="..\Services\SpectrumAnalyzer.cs" Link="Linked\SpectrumAnalyzer.cs" />
+    <Compile Include="..\ViewModels\VisualizerViewModel.cs" Link="Linked\VisualizerViewModel.cs" />
+    <Compile Include="..\ViewModels\RelayCommand.cs" Link="Linked\RelayCommand.cs" />
+    <Compile Include="..\Services\HudPlacement.cs" Link="Linked\HudPlacement.cs" />
+  </ItemGroup>
+</Project>

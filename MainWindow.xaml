@@ -1,11 +1,14 @@
 <Window x:Class="GearGlass.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:GearGlass.Views"
         Width="500"
-        Height="190"
+        Height="230"
         SizeToContent="Manual"
         Topmost="True"
-        ShowInTaskbar="True"
+        ShowInTaskbar="False"
+        Icon="Assets/GearGlass.ico"
+        Title="GearGlass"
         WindowStyle="None"
         ResizeMode="NoResize"
         AllowsTransparency="True"
@@ -14,7 +17,7 @@
         MouseLeave="Drawer_MouseLeave"
         Loaded="Window_Loaded"
         SourceInitialized="Window_SourceInitialized"
-        Closed="Window_Closed">
+        Closing="Window_Closing">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Template">
@@ -43,6 +46,7 @@
     <Border Margin="8"
             Padding="8"
             CornerRadius="18"
+            MouseLeftButtonDown="Hud_MouseLeftButtonDown"
             BorderThickness="1"
             BorderBrush="#C9A68158"
             Background="#B5211D20">
@@ -50,33 +54,35 @@
             <DropShadowEffect BlurRadius="28" ShadowDepth="5" Opacity="0.38" Color="#080608" />
         </Border.Effect>
         <Grid>
+            <!-- The collapsed window leaves only 28px inside the padding; the negative margin
+                 lets the tab use the padding so the icon is not clipped. -->
             <Border x:Name="CollapsedTab"
                     Visibility="Collapsed"
-                    Width="44"
-                    Height="44"
+                    Width="42"
+                    Height="42"
+                    Margin="-7"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
-                    CornerRadius="12"
+                    CornerRadius="16"
                     BorderThickness="1"
                     BorderBrush="#A57E5F43"
                     Background="#B5302F28">
-                <TextBlock Text="⚙"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Foreground="#E8BE78"
-                           FontSize="19" />
+                <Image Source="Assets/GearGlass.png"
+                       Width="32"
+                       Height="32"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
             </Border>
             <Grid x:Name="DrawerContent">
             <Grid.RowDefinitions>
                 <RowDefinition Height="44" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
                     Padding="8,5"
                     CornerRadius="12"
-                    Background="#B5302F28"
-                    MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    Background="#B5302F28">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="38" />
@@ -91,11 +97,6 @@
                             CornerRadius="7"
                             BorderBrush="#A57E5F43"
                             BorderThickness="1">
-                        <Border.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="9" />
-                            </Style>
-                        </Border.Resources>
                         <Border.Background>
                             <LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
                                 <GradientStop Color="#28423C" Offset="0" />
@@ -150,7 +151,6 @@
                                 Background="#332D2721"
                                 BorderBrush="#705F4935"
                                 BorderThickness="1"
-                                Style="{x:Null}"
                                 Cursor="Hand"
                                 Click="PlayPause_Click"
                                 ToolTip="Oynat veya duraklat" />
@@ -185,7 +185,6 @@
                                 Value="{Binding AppVolumePercent, Mode=TwoWay}"
                                 IsEnabled="{Binding AppVolumeAvailable}"
                                 AutomationProperties.Name="Aktif uygulama ses düzeyi"
-                                ValueChanged="AppVolumeSlider_ValueChanged"
                                 ToolTip="Yalnızca aktif medya uygulamasının ses düzeyi" />
                     </StackPanel>
                     <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
@@ -220,6 +219,32 @@
             </Border>
 
             <Border Grid.Row="1"
+                    Height="34"
+                    Margin="0,6,0,0"
+                    CornerRadius="10"
+                    BorderBrush="#70514C3A"
+                    BorderThickness="1"
+                    Background="#B5282224"
+                    Cursor="Hand"
+                    ToolTip="Ses dalgası görünümünü değiştirmek için tıklayın"
+                    AutomationProperties.Name="Ses görselleştirici">
+                <Border.InputBindings>
+                    <MouseBinding Gesture="LeftClick" Command="{Binding Visualizer.CycleModeCommand}" />
+                </Border.InputBindings>
+                <Grid>
+                    <views:AudioVisualizer Margin="8,4,48,4"
+                                           Snapshot="{Binding Visualizer.Snapshot}" />
+                    <TextBlock Text="{Binding Visualizer.ModeLabel}"
+                               Margin="0,0,8,0"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Foreground="#A99172"
+                               FontFamily="Consolas"
+                               FontSize="7" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2"
                     Margin="0,6,0,0"
                     Padding="7,5"
                     CornerRadius="14"
